@@ -49,7 +49,7 @@ export class LocoClient {
     });
   }
 
-  /** Full login sequence: connect → handshake → GETTOKEN → CHECKIN → LOGINLIST */
+  /** Full login sequence: connect → handshake → CHECKIN → LOGINLIST → SETST → GETTOKEN */
   async login(): Promise<Record<string, unknown>> {
     console.log(
       `[LocoClient] Connecting to ${this.config.host}:${this.config.port}...`,
@@ -57,45 +57,49 @@ export class LocoClient {
     await this.socket.connect();
     console.log("[LocoClient] Handshake complete.");
 
-    // Step 1: GETTOKEN
-    console.log("[LocoClient] Sending GETTOKEN...");
-    const tokenResp = await this.socket.request("GETTOKEN", {
-      ts: [2, 3, 11, 12, 4, 9, 10, 15],
-    });
-    console.log("[LocoClient] GETTOKEN response:", tokenResp.body);
-
-    // Step 2: CHECKIN
+    // Step 1: CHECKIN
     console.log("[LocoClient] Sending CHECKIN...");
     const checkinResp = await this.socket.request("CHECKIN", {
-      MCCMNC: this.credentials.mccmnc,
+      userId: this.credentials.userId,
+      os: "android",
+      ntype: 0,
       appVer: this.credentials.appVer,
       lang: this.credentials.lang,
-      ntype: 3,
-      os: "android",
-      userId: this.credentials.userId,
+      MCCMNC: this.credentials.mccmnc,
     });
     console.log("[LocoClient] CHECKIN response:", checkinResp.body);
 
-    // Step 3: LOGINLIST
+    // Step 2: LOGINLIST
     console.log("[LocoClient] Sending LOGINLIST...");
     const loginResp = await this.socket.request("LOGINLIST", {
-      oauthToken: this.credentials.oauthToken,
-      duuid: this.credentials.duuid,
       appVer: this.credentials.appVer,
+      prtVer: "1",
       os: "android",
-      MCCMNC: this.credentials.mccmnc,
       lang: this.credentials.lang,
-      ntype: 3,
+      duuid: this.credentials.duuid,
+      ntype: 0,
+      MCCMNC: this.credentials.mccmnc,
+      revision: 0,
       chatIds: [],
       maxIds: [],
       lastTokenId: 0,
       lbk: 0,
-      bg: false,
-      revision: 0,
-      prtVer: "1",
+      bg: true,
+      oauthToken: this.credentials.oauthToken,
       rp: Buffer.from([0x01, 0x00, 0xff, 0xff, 0x01, 0x00]),
     });
     console.log("[LocoClient] LOGINLIST response status:", loginResp.header.statusCode);
+
+    // Step 3: SETST (set status = online)
+    console.log("[LocoClient] Sending SETST...");
+    await this.socket.request("SETST", { st: 2 });
+    await this.socket.request("SETST", { st: 1 });
+
+    // Step 4: GETTOKEN
+    console.log("[LocoClient] Sending GETTOKEN...");
+    await this.socket.request("GETTOKEN", {
+      ts: [2, 3, 11, 12, 4, 9, 10, 18, 19],
+    });
 
     return loginResp.body;
   }

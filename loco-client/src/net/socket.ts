@@ -25,7 +25,7 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
   private socket: TLSSocket | Socket | null = null;
   private aesKey: Buffer;
   private reader: PacketReader;
-  private packetId = 10000;
+  private packetId = 1000;
   private config: LocoClientConfig;
 
   /** Map of pending request id -> resolve callback */

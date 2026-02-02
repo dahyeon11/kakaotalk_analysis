@@ -9,9 +9,10 @@ export {
   PacketReader,
 } from "./protocol/index.ts";
 export {
-  aesEncryptCFB,
-  aesDecryptCFB,
+  aesEncryptGCM,
+  aesDecryptGCM,
   generateAESKey,
+  generateNonce,
   rsaEncryptOAEP,
   toPem,
 } from "./crypto/index.ts";

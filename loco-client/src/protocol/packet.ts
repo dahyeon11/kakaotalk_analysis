@@ -8,9 +8,10 @@ import {
   type LocoHandshakeData,
 } from "../types/index.ts";
 import {
-  aesEncryptCFB,
-  aesDecryptCFB,
-  generateIV,
+  aesEncryptGCM,
+  aesDecryptGCM,
+  generateNonce,
+  NONCE_SIZE,
   rsaEncryptOAEP,
 } from "../crypto/index.ts";
 
@@ -86,13 +87,14 @@ export function buildEncryptedPacket(
   locoPacket: Buffer,
   aesKey: Buffer,
 ): Buffer {
-  const iv = generateIV();
-  const encrypted = aesEncryptCFB(locoPacket, aesKey, iv);
+  const nonce = generateNonce();
+  const encrypted = aesEncryptGCM(locoPacket, aesKey, nonce);
 
-  const buf = Buffer.alloc(4 + 16 + encrypted.length);
-  buf.writeUInt32LE(16 + encrypted.length, 0); // length = iv + payload
-  iv.copy(buf, 4);
-  encrypted.copy(buf, 20);
+  // [length:4][nonce:12][ciphertext+tag]
+  const buf = Buffer.alloc(4 + NONCE_SIZE + encrypted.length);
+  buf.writeUInt32LE(NONCE_SIZE + encrypted.length, 0);
+  nonce.copy(buf, 4);
+  encrypted.copy(buf, 4 + NONCE_SIZE);
 
   return buf;
 }
@@ -108,9 +110,9 @@ export function parseEncryptedPacket(
 
   if (data.length < totalSize) return null; // fragmented
 
-  const iv = data.subarray(4, 20);
-  const payload = data.subarray(20, totalSize);
-  const decrypted = aesDecryptCFB(payload, aesKey, iv);
+  const nonce = data.subarray(4, 4 + NONCE_SIZE);
+  const payload = data.subarray(4 + NONCE_SIZE, totalSize);
+  const decrypted = aesDecryptGCM(payload, aesKey, nonce);
 
   return { decrypted, consumed: totalSize };
 }
@@ -125,11 +127,11 @@ export function buildHandshakePacket(
 ): Buffer {
   const encryptedKey = rsaEncryptOAEP(aesKey, serverPublicKeyPem);
 
-  // handshake type = 15 (RSA-OAEP-SHA1), block cipher mode = 2 (AES/CFB)
+  // handshake type = 15 (RSA-OAEP-SHA1), block cipher mode = 4 (AES/GCM)
   const buf = Buffer.alloc(4 + 4 + 4 + 2 + encryptedKey.length);
   buf.writeUInt32LE(HANDSHAKE_LENGTH, 0);
   buf.writeUInt32LE(15, 4); // encryption type
-  buf.writeUInt32LE(2, 8); // block cipher mode (CFB)
+  buf.writeUInt32LE(4, 8); // block cipher mode (GCM)
   buf.writeUInt16LE(0, 12); // padding
   encryptedKey.copy(buf, 14);
 
