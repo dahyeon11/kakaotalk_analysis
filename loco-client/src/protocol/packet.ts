@@ -12,7 +12,7 @@ import {
   aesDecryptCFB,
   generateIV,
   IV_SIZE,
-  rsaEncryptOAEP,
+  rsaEncryptPKCS1,
 } from "../crypto/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ export function buildHandshakePacket(
   aesKey: Buffer,
   serverPublicKeyPem: string,
 ): Buffer {
-  const encryptedKey = rsaEncryptOAEP(aesKey, serverPublicKeyPem);
+  const encryptedKey = rsaEncryptPKCS1(aesKey, serverPublicKeyPem);
 
   // [keyLen:4][encType:4][blockMode:4][encKey:keyLen]
   const buf = Buffer.alloc(4 + 4 + 4 + encryptedKey.length);

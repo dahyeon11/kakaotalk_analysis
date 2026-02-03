@@ -1,8 +1,8 @@
 import { publicEncrypt, constants } from "node:crypto";
 
 /**
- * RSA-OAEP encrypt with SHA1 (matches KakaoTalk's RSA/NONE/OAEPWithSHA1AndMGF1Padding).
- * Used during handshake to send the AES session key to the server.
+ * RSA-OAEP encrypt with SHA1.
+ * Used for encType=15 (older protocol).
  */
 export function rsaEncryptOAEP(
   plaintext: Buffer,
@@ -13,6 +13,23 @@ export function rsaEncryptOAEP(
       key: publicKeyPem,
       padding: constants.RSA_PKCS1_OAEP_PADDING,
       oaepHash: "sha1",
+    },
+    plaintext,
+  );
+}
+
+/**
+ * RSA encrypt with PKCS1v1.5 padding.
+ * Used for encType=16 (current KakaoTalk protocol).
+ */
+export function rsaEncryptPKCS1(
+  plaintext: Buffer,
+  publicKeyPem: string,
+): Buffer {
+  return publicEncrypt(
+    {
+      key: publicKeyPem,
+      padding: constants.RSA_PKCS1_PADDING,
     },
     plaintext,
   );
