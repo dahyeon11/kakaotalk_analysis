@@ -55,36 +55,17 @@ if (isMain) {
     process.exit(1);
   }
 
-  const { fetchCheckinServer } = await import("./net/checkin.ts");
-
-  // Step 1: Booking — discover checkin server via LOCO protocol
-  console.log("[Booking] Resolving checkin server from booking-loco.kakao.com...");
-  const checkinServer = await resolveCheckinServer(serverPublicKey, {
+  // Step 1: Booking — discover LOCO server via LOCO protocol
+  console.log("[Booking] Resolving LOCO server from booking-loco.kakao.com...");
+  const locoServer = await resolveCheckinServer(serverPublicKey, {
     os: "android",
     MCCMNC: credentials.mccmnc,
     model: "",
   });
-  console.log(`[Booking] Checkin server: ${checkinServer.host}:${checkinServer.port}`);
+  console.log(`[Booking] LOCO server: ${locoServer.host}:${locoServer.port}`);
 
-  // Step 2: Checkin — discover LOCO session server (TLS + plaintext LOCO)
-  console.log("[Checkin] Fetching LOCO session server...");
-  const locoServer = await fetchCheckinServer(
-    checkinServer.host,
-    checkinServer.port,
-    serverPublicKey,
-    {
-      userId: credentials.userId,
-      os: "android",
-      ntype: 0,
-      appVer: credentials.appVer,
-      lang: credentials.lang,
-      MCCMNC: credentials.mccmnc,
-    },
-  );
-  console.log(`[Checkin] LOCO server: ${locoServer.host}:${locoServer.port}`);
-  console.log("[Checkin] Raw response:", JSON.stringify(locoServer.raw, null, 2));
-
-  // Step 3: Connect to LOCO session server (raw TCP + RSA handshake + AES-GCM)
+  // Step 2: Connect to LOCO server (raw TCP + RSA handshake + AES-GCM)
+  // CHECKIN + LOGINLIST + all commands happen on this single encrypted connection
   const config = {
     host: locoServer.host,
     port: locoServer.port,
