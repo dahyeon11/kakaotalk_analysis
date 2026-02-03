@@ -25,11 +25,11 @@ export interface BookingResponse {
   /** LOCO server port */
   port: number;
   /** IPv6 host (if available) */
-  host6?: string;
+  host6?: string | undefined;
   /** Fallback hosts */
-  cshost?: string;
+  cshost?: string | undefined;
   /** Fallback port */
-  csport?: number;
+  csport?: number | undefined;
 }
 
 const BOOKING_URL = "https://booking-loco.kakao.com/booking";
