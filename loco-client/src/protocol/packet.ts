@@ -8,10 +8,10 @@ import {
   type LocoHandshakeData,
 } from "../types/index.ts";
 import {
-  aesEncryptCFB,
-  aesDecryptCFB,
-  generateIV,
-  IV_SIZE,
+  aesEncryptGCM,
+  aesDecryptGCM,
+  generateNonce,
+  NONCE_SIZE,
   rsaEncryptPKCS1,
 } from "../crypto/index.ts";
 
@@ -87,14 +87,14 @@ export function buildEncryptedPacket(
   locoPacket: Buffer,
   aesKey: Buffer,
 ): Buffer {
-  const iv = generateIV();
-  const encrypted = aesEncryptCFB(locoPacket, aesKey, iv);
+  const nonce = generateNonce();
+  const encrypted = aesEncryptGCM(locoPacket, aesKey, nonce);
 
-  // [length:4][iv:16][ciphertext]
-  const buf = Buffer.alloc(4 + IV_SIZE + encrypted.length);
-  buf.writeUInt32LE(IV_SIZE + encrypted.length, 0);
-  iv.copy(buf, 4);
-  encrypted.copy(buf, 4 + IV_SIZE);
+  // [length:4][nonce:12][ciphertext+tag]
+  const buf = Buffer.alloc(4 + NONCE_SIZE + encrypted.length);
+  buf.writeUInt32LE(NONCE_SIZE + encrypted.length, 0);
+  nonce.copy(buf, 4);
+  encrypted.copy(buf, 4 + NONCE_SIZE);
 
   return buf;
 }
@@ -110,9 +110,9 @@ export function parseEncryptedPacket(
 
   if (data.length < totalSize) return null; // fragmented
 
-  const iv = data.subarray(4, 4 + IV_SIZE);
-  const ciphertext = data.subarray(4 + IV_SIZE, totalSize);
-  const decrypted = aesDecryptCFB(ciphertext, aesKey, iv);
+  const nonce = data.subarray(4, 4 + NONCE_SIZE);
+  const ciphertextWithTag = data.subarray(4 + NONCE_SIZE, totalSize);
+  const decrypted = aesDecryptGCM(ciphertextWithTag, aesKey, nonce);
 
   return { decrypted, consumed: totalSize };
 }

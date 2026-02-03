@@ -4,45 +4,11 @@ import {
   randomBytes,
 } from "node:crypto";
 
-const CFB_ALGORITHM = "aes-256-cfb";
-
-/** CFB IV size in bytes */
-export const IV_SIZE = 16;
-
-/** AES-256 key size in bytes */
-export const AES_KEY_SIZE = 32;
-
-/**
- * Encrypt with AES-256-CFB.
- * Returns ciphertext only (no auth tag in CFB mode).
- */
-export function aesEncryptCFB(
-  plaintext: Buffer,
-  key: Buffer,
-  iv: Buffer,
-): Buffer {
-  const cipher = createCipheriv(CFB_ALGORITHM, key, iv);
-  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
-}
-
-/**
- * Decrypt AES-256-CFB.
- */
-export function aesDecryptCFB(
-  ciphertext: Buffer,
-  key: Buffer,
-  iv: Buffer,
-): Buffer {
-  const decipher = createDecipheriv(CFB_ALGORITHM, key, iv);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-}
+/** AES-128 key size in bytes (confirmed by Frida capture) */
+export const AES_KEY_SIZE = 16;
 
 export function generateAESKey(): Buffer {
-  return randomBytes(AES_KEY_SIZE); // 32 bytes for AES-256
-}
-
-export function generateIV(): Buffer {
-  return randomBytes(IV_SIZE);
+  return randomBytes(AES_KEY_SIZE); // 16 bytes for AES-128
 }
 
 // Legacy GCM functions kept for reference
