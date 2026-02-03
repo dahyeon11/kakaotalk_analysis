@@ -98,6 +98,9 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
       }
 
       this.socket.on("data", (chunk: Buffer) => {
+        if (process.env["LOCO_DEBUG"]) {
+          console.log(`[Socket] recv ${chunk.length} bytes: ${chunk.subarray(0, Math.min(64, chunk.length)).toString("hex")}`);
+        }
         const reader = this.plaintext ? this.plainReader : this.encryptedReader;
         const packets = reader.feed(chunk);
         for (const pkt of packets) {
@@ -134,6 +137,9 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
       : buildEncryptedPacket(inner, this.aesKey);
 
     return new Promise((resolve, reject) => {
+      if (process.env["LOCO_DEBUG"]) {
+        console.log(`[Socket] send ${command} id=${id} ${packet.length} bytes: ${packet.subarray(0, Math.min(64, packet.length)).toString("hex")}`);
+      }
       this.pending.set(id, resolve);
       this.socket!.write(packet, (err) => {
         if (err) {
