@@ -127,13 +127,12 @@ export function buildHandshakePacket(
 ): Buffer {
   const encryptedKey = rsaEncryptOAEP(aesKey, serverPublicKeyPem);
 
-  // handshake type = 15 (RSA-OAEP-SHA1), block cipher mode = 4 (AES/GCM)
-  const buf = Buffer.alloc(4 + 4 + 4 + 2 + encryptedKey.length);
-  buf.writeUInt32LE(HANDSHAKE_LENGTH, 0);
-  buf.writeUInt32LE(15, 4); // encryption type
-  buf.writeUInt32LE(4, 8); // block cipher mode (GCM)
-  buf.writeUInt16LE(0, 12); // padding
-  encryptedKey.copy(buf, 14);
+  // [keyLen:4][encType:4][blockMode:4][encKey:keyLen]
+  const buf = Buffer.alloc(4 + 4 + 4 + encryptedKey.length);
+  buf.writeUInt32LE(encryptedKey.length, 0); // RSA ciphertext length (256)
+  buf.writeUInt32LE(15, 4); // encryption type (RSA-OAEP-SHA1)
+  buf.writeUInt32LE(4, 8); // block cipher mode (AES/GCM)
+  encryptedKey.copy(buf, 12);
 
   return buf;
 }
