@@ -6,6 +6,7 @@ export type LocoCommand =
   | "WRITE"
   | "MSG"
   | "SYNCMSG"
+  | "GETCONF"
   | "GETPK"
   | "GETLPK"
   | "SETPK"

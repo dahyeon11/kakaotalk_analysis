@@ -49,7 +49,11 @@ export class LocoClient {
     });
   }
 
-  /** Full login sequence: connect → handshake → CHECKIN → LOGINLIST → SETST → GETTOKEN */
+  /**
+   * Login sequence: connect → RSA handshake → LOGINLIST → SETST → GETTOKEN.
+   * CHECKIN must be done separately beforehand (via fetchCheckinServer)
+   * to discover this server's host:port.
+   */
   async login(): Promise<Record<string, unknown>> {
     console.log(
       `[LocoClient] Connecting to ${this.config.host}:${this.config.port}...`,
@@ -57,19 +61,7 @@ export class LocoClient {
     await this.socket.connect();
     console.log("[LocoClient] Handshake complete.");
 
-    // Step 1: CHECKIN
-    console.log("[LocoClient] Sending CHECKIN...");
-    const checkinResp = await this.socket.request("CHECKIN", {
-      userId: this.credentials.userId,
-      os: "android",
-      ntype: 0,
-      appVer: this.credentials.appVer,
-      lang: this.credentials.lang,
-      MCCMNC: this.credentials.mccmnc,
-    });
-    console.log("[LocoClient] CHECKIN response:", checkinResp.body);
-
-    // Step 2: LOGINLIST
+    // Step 1: LOGINLIST
     console.log("[LocoClient] Sending LOGINLIST...");
     const loginResp = await this.socket.request("LOGINLIST", {
       appVer: this.credentials.appVer,
