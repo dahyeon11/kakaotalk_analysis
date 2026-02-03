@@ -47,7 +47,7 @@ export async function fetchBookingServer(
     serverPublicKey,
   };
 
-  const socket = new LocoSocket(config);
+  const socket = new LocoSocket(config, { plaintext: true });
 
   try {
     await socket.connect();

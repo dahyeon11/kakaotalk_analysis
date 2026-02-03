@@ -5,8 +5,10 @@ import { generateAESKey } from "../crypto/index.ts";
 import {
   buildHandshakePacket,
   buildEncryptedPacket,
+  buildPlainPacket,
   buildLocoPacket,
   PacketReader,
+  PlainPacketReader,
 } from "../protocol/index.ts";
 import type {
   LocoClientConfig,
@@ -21,12 +23,22 @@ export interface LocoSocketEvents {
   connected: [];
 }
 
+export interface LocoSocketOptions {
+  /**
+   * When true, packets are sent/received as plain LOCO over TLS
+   * (no RSA handshake, no AES encryption). Used for booking server.
+   */
+  plaintext?: boolean;
+}
+
 export class LocoSocket extends EventEmitter<LocoSocketEvents> {
   private socket: TLSSocket | Socket | null = null;
   private aesKey: Buffer;
-  private reader: PacketReader;
+  private encryptedReader: PacketReader;
+  private plainReader: PlainPacketReader;
   private packetId = 1000;
   private config: LocoClientConfig;
+  private plaintext: boolean;
 
   /** Map of pending request id -> resolve callback */
   private pending = new Map<
@@ -37,17 +49,26 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
     }) => void
   >();
 
-  constructor(config: LocoClientConfig) {
+  constructor(config: LocoClientConfig, options?: LocoSocketOptions) {
     super();
     this.config = config;
+    this.plaintext = options?.plaintext ?? false;
     this.aesKey = generateAESKey();
-    this.reader = new PacketReader(this.aesKey);
+    this.encryptedReader = new PacketReader(this.aesKey);
+    this.plainReader = new PlainPacketReader();
   }
 
-  /** Connect to the LOCO server and perform the handshake. */
+  /** Connect to the LOCO server. Performs RSA handshake unless in plaintext mode. */
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       const onConnect = () => {
+        if (this.plaintext) {
+          // No handshake needed — TLS provides encryption
+          this.emit("connected");
+          resolve();
+          return;
+        }
+
         // Send handshake: RSA-encrypted AES key
         const handshake = buildHandshakePacket(
           this.aesKey,
@@ -77,7 +98,8 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
       }
 
       this.socket.on("data", (chunk: Buffer) => {
-        const packets = this.reader.feed(chunk);
+        const reader = this.plaintext ? this.plainReader : this.encryptedReader;
+        const packets = reader.feed(chunk);
         for (const pkt of packets) {
           // Resolve pending request if matched
           const resolver = this.pending.get(pkt.header.id);
@@ -107,11 +129,13 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
   ): Promise<{ header: LocoPacketHeader; body: Record<string, unknown> }> {
     const id = ++this.packetId;
     const inner = buildLocoPacket(id, command, 0, body);
-    const encrypted = buildEncryptedPacket(inner, this.aesKey);
+    const packet = this.plaintext
+      ? buildPlainPacket(inner)
+      : buildEncryptedPacket(inner, this.aesKey);
 
     return new Promise((resolve, reject) => {
       this.pending.set(id, resolve);
-      this.socket!.write(encrypted, (err) => {
+      this.socket!.write(packet, (err) => {
         if (err) {
           this.pending.delete(id);
           reject(err);
@@ -124,8 +148,10 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
   send(command: LocoCommand, body: Record<string, unknown>): number {
     const id = ++this.packetId;
     const inner = buildLocoPacket(id, command, 0, body);
-    const encrypted = buildEncryptedPacket(inner, this.aesKey);
-    this.socket!.write(encrypted);
+    const packet = this.plaintext
+      ? buildPlainPacket(inner)
+      : buildEncryptedPacket(inner, this.aesKey);
+    this.socket!.write(packet);
     return id;
   }
 

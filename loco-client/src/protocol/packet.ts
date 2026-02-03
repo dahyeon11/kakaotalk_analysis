@@ -144,7 +144,48 @@ export function isHandshakePacket(data: Buffer): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Stream reassembly helper
+// Plain (unencrypted) packet framing — used over TLS (booking, checkin)
+// [length:4 LE][loco_packet:length]
+// ---------------------------------------------------------------------------
+
+export function buildPlainPacket(locoPacket: Buffer): Buffer {
+  const buf = Buffer.alloc(4 + locoPacket.length);
+  buf.writeUInt32LE(locoPacket.length, 0);
+  locoPacket.copy(buf, 4);
+  return buf;
+}
+
+export class PlainPacketReader {
+  private buffer: Buffer = Buffer.alloc(0);
+
+  /** Append incoming data and yield all complete parsed packets. */
+  feed(
+    chunk: Buffer,
+  ): Array<{ header: LocoPacketHeader; body: Record<string, unknown> }> {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    const results: Array<{
+      header: LocoPacketHeader;
+      body: Record<string, unknown>;
+    }> = [];
+
+    while (this.buffer.length >= 4) {
+      const length = this.buffer.readUInt32LE(0);
+      const totalSize = 4 + length;
+      if (this.buffer.length < totalSize) break;
+
+      const payload = this.buffer.subarray(4, totalSize);
+      const loco = parseLocoPacket(payload);
+      if (loco) results.push(loco);
+
+      this.buffer = this.buffer.subarray(totalSize);
+    }
+
+    return results;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Encrypted stream reassembly helper
 // ---------------------------------------------------------------------------
 
 export class PacketReader {
