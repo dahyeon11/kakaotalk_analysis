@@ -1,85 +1,106 @@
 /**
- * LOCO Booking API — fetches the LOCO server host:port before connecting.
+ * LOCO Booking — connects to booking-loco.kakao.com:443 over TLS,
+ * performs LOCO RSA handshake, sends GETCONF, and returns checkin server info.
  *
- * KakaoTalk calls `https://booking-loco.kakao.com/booking` with a JSON body
- * to discover which LOCO server to connect to. The response contains host/port
- * for the raw TCP LOCO connection.
+ * Flow (based on kiwitalk reference):
+ *   1. TLS connect to booking-loco.kakao.com:443
+ *   2. LOCO RSA handshake (encrypt AES session key)
+ *   3. Send GETCONF command → receive checkin server list
+ *   4. Disconnect
  */
 
-export interface BookingRequest {
-  /** OS type: "android" or "ios" */
+import { LocoSocket } from "./socket.ts";
+import type { LocoClientConfig } from "../types/index.ts";
+
+export interface GetConfRequest {
   os: string;
-  /** App version */
-  appVer: string;
-  /** MCCMNC */
   MCCMNC: string;
-  /** Country ISO */
-  countryISO?: string;
-  /** Language */
-  lang?: string;
+  model: string;
 }
 
-export interface BookingResponse {
-  /** LOCO server host */
-  host: string;
-  /** LOCO server port */
-  port: number;
-  /** IPv6 host (if available) */
-  host6?: string | undefined;
-  /** Fallback hosts */
-  cshost?: string | undefined;
-  /** Fallback port */
-  csport?: number | undefined;
+export interface GetConfResponse {
+  /** Checkin host list (v2sl) */
+  checkinHosts: string[];
+  /** Checkin host list (lsl - preferred) */
+  checkinHostsLsl: string[];
+  /** Available ports */
+  ports: number[];
+  /** Full raw response for debugging */
+  raw: Record<string, unknown>;
 }
 
-const BOOKING_URL = "https://booking-loco.kakao.com/booking";
+const BOOKING_HOST = "booking-loco.kakao.com";
+const BOOKING_PORT = 443;
 
 /**
- * Call the booking API to get the LOCO server address.
- * Falls back to the provided default host:port on failure.
+ * Connect to the booking server via TLS + LOCO protocol,
+ * send GETCONF, and return checkin server information.
  */
 export async function fetchBookingServer(
-  req: BookingRequest,
-  fallbackHost = "211.249.240.122",
-  fallbackPort = 9282,
-): Promise<BookingResponse> {
+  serverPublicKey: string,
+  req: GetConfRequest,
+): Promise<GetConfResponse> {
+  const config: LocoClientConfig = {
+    host: BOOKING_HOST,
+    port: BOOKING_PORT,
+    useTLS: true,
+    serverPublicKey,
+  };
+
+  const socket = new LocoSocket(config);
+
   try {
-    const body = JSON.stringify({
-      os: req.os,
-      appVer: req.appVer,
+    await socket.connect();
+    console.log("[Booking] Connected to booking-loco.kakao.com:443");
+
+    const resp = await socket.request("GETCONF", {
       MCCMNC: req.MCCMNC,
-      countryISO: req.countryISO ?? "KR",
-      lang: req.lang ?? "ko",
+      os: req.os,
+      model: req.model,
     });
 
-    const resp = await fetch(BOOKING_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": `KT/${req.appVer} An/14.0 ko`,
-        "A": "android/" + req.appVer + "/ko",
-      },
-      body,
-    });
+    console.log("[Booking] GETCONF response received");
 
-    if (!resp.ok) {
-      console.warn(`[Booking] HTTP ${resp.status}, using fallback`);
-      return { host: fallbackHost, port: fallbackPort };
-    }
+    const body = resp.body;
 
-    const data = (await resp.json()) as Record<string, unknown>;
+    // Extract checkin hosts from ticket.lsl or ticket.v2sl
+    const ticket = (body["ticket"] as Record<string, unknown>) ?? {};
+    const lsl = (ticket["lsl"] as string[]) ?? [];
+    const v2sl = (ticket["v2sl"] as string[]) ?? [];
 
-    // The booking response may have the server info at top level or nested
-    const host = (data["host"] as string) ?? fallbackHost;
-    const port = (data["port"] as number) ?? fallbackPort;
+    // Extract ports from wifi config
+    const wifi = (body["wifi"] as Record<string, unknown>) ?? {};
+    const ports = (wifi["ports"] as number[]) ?? [9282];
 
     return {
-      host,
-      port,
-      host6: data["host6"] as string | undefined,
-      cshost: data["cshost"] as string | undefined,
-      csport: data["csport"] as number | undefined,
+      checkinHosts: v2sl,
+      checkinHostsLsl: lsl,
+      ports,
+      raw: body,
     };
+  } finally {
+    socket.disconnect();
+  }
+}
+
+/**
+ * Convenience function: booking → pick first checkin host + port.
+ * Returns { host, port } ready for checkin connection.
+ */
+export async function resolveCheckinServer(
+  serverPublicKey: string,
+  req: GetConfRequest,
+  fallbackHost = "121.53.93.55",
+  fallbackPort = 9282,
+): Promise<{ host: string; port: number }> {
+  try {
+    const conf = await fetchBookingServer(serverPublicKey, req);
+    const hosts = conf.checkinHostsLsl.length > 0
+      ? conf.checkinHostsLsl
+      : conf.checkinHosts;
+    const host = hosts[0] ?? fallbackHost;
+    const port = conf.ports[0] ?? fallbackPort;
+    return { host, port };
   } catch (err) {
     console.warn("[Booking] Failed:", (err as Error).message, "— using fallback");
     return { host: fallbackHost, port: fallbackPort };

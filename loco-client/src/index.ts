@@ -1,5 +1,5 @@
 export { LocoClient, type ChatMessage } from "./client.ts";
-export { LocoSocket, fetchBookingServer } from "./net/index.ts";
+export { LocoSocket, fetchBookingServer, resolveCheckinServer } from "./net/index.ts";
 export {
   buildLocoPacket,
   parseLocoPacket,
@@ -27,7 +27,7 @@ const isMain = process.argv[1]?.endsWith("index.ts");
 if (isMain) {
   const { LocoClient } = await import("./client.ts");
   const { toPem } = await import("./crypto/rsa.ts");
-  const { fetchBookingServer } = await import("./net/booking.ts");
+  const { resolveCheckinServer } = await import("./net/booking.ts");
 
   const pubkeyHex = process.env["LOCO_SERVER_PUBKEY_HEX"] ?? "";
   const serverPublicKey = pubkeyHex
@@ -55,20 +55,20 @@ if (isMain) {
     process.exit(1);
   }
 
-  // Step 1: Booking — discover LOCO server address
-  console.log("[Booking] Fetching LOCO server address...");
-  const booking = await fetchBookingServer({
+  // Step 1: Booking — discover checkin server via LOCO protocol
+  console.log("[Booking] Resolving checkin server from booking-loco.kakao.com...");
+  const checkinServer = await resolveCheckinServer(serverPublicKey, {
     os: "android",
-    appVer: credentials.appVer,
     MCCMNC: credentials.mccmnc,
-    lang: credentials.lang,
+    model: "",
   });
-  console.log(`[Booking] Server: ${booking.host}:${booking.port}`);
+  console.log(`[Booking] Checkin server: ${checkinServer.host}:${checkinServer.port}`);
 
+  // Step 2: Connect to checkin/LOCO server (raw TCP + LOCO encryption)
   const config = {
-    host: booking.host,
-    port: booking.port,
-    useTLS: false, // LOCO uses raw TCP + its own RSA/AES encryption
+    host: checkinServer.host,
+    port: checkinServer.port,
+    useTLS: false,
     serverPublicKey,
   };
 
@@ -86,7 +86,7 @@ if (isMain) {
   // Log decoded messages
   client.onMessage = (msg) => {
     console.log(
-      `\n💬 [Chat ${msg.chatId}] sender=${msg.sender}: ${msg.message}\n`,
+      `\n[Chat ${msg.chatId}] sender=${msg.sender}: ${msg.message}\n`,
     );
   };
 

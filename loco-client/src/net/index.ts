@@ -1,2 +1,2 @@
 export { LocoSocket } from "./socket.ts";
-export { fetchBookingServer, type BookingRequest, type BookingResponse } from "./booking.ts";
+export { fetchBookingServer, resolveCheckinServer, type GetConfRequest, type GetConfResponse } from "./booking.ts";
