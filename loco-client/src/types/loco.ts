@@ -62,9 +62,9 @@ export interface LocoClientConfig {
 }
 
 export const DEFAULT_CONFIG: LocoClientConfig = {
-  host: "loco.kakao.com",
-  port: 443,
-  useTLS: true,
+  host: "211.249.240.122",
+  port: 9282,
+  useTLS: false,
   serverPublicKey: "",
 };
 

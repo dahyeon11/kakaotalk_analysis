@@ -1,5 +1,5 @@
 export { LocoClient, type ChatMessage } from "./client.ts";
-export { LocoSocket } from "./net/index.ts";
+export { LocoSocket, fetchBookingServer } from "./net/index.ts";
 export {
   buildLocoPacket,
   parseLocoPacket,
@@ -26,21 +26,13 @@ const isMain = process.argv[1]?.endsWith("index.ts");
 
 if (isMain) {
   const { LocoClient } = await import("./client.ts");
-
-  // ⚠ Replace with real values captured via Frida
   const { toPem } = await import("./crypto/rsa.ts");
+  const { fetchBookingServer } = await import("./net/booking.ts");
 
   const pubkeyHex = process.env["LOCO_SERVER_PUBKEY_HEX"] ?? "";
   const serverPublicKey = pubkeyHex
     ? toPem(Buffer.from(pubkeyHex, "hex").toString("base64"))
     : "";
-
-  const config = {
-    host: "loco.kakao.com",
-    port: 443,
-    useTLS: true,
-    serverPublicKey,
-  };
 
   const credentials = {
     oauthToken: process.env["LOCO_OAUTH_TOKEN"] ?? "",
@@ -62,6 +54,23 @@ if (isMain) {
     );
     process.exit(1);
   }
+
+  // Step 1: Booking — discover LOCO server address
+  console.log("[Booking] Fetching LOCO server address...");
+  const booking = await fetchBookingServer({
+    os: "android",
+    appVer: credentials.appVer,
+    MCCMNC: credentials.mccmnc,
+    lang: credentials.lang,
+  });
+  console.log(`[Booking] Server: ${booking.host}:${booking.port}`);
+
+  const config = {
+    host: booking.host,
+    port: booking.port,
+    useTLS: false, // LOCO uses raw TCP + its own RSA/AES encryption
+    serverPublicKey,
+  };
 
   const client = new LocoClient(config, credentials);
 
