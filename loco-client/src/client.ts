@@ -90,16 +90,19 @@ export class LocoClient {
     });
     console.log("[LocoClient] LOGINLIST response status:", loginResp.header.statusCode);
 
-    // Step 3: SETST (set status = online)
-    console.log("[LocoClient] Sending SETST...");
+    // Step 3: SETST (set status = 2, "away/background")
+    console.log("[LocoClient] Sending SETST (st=2)...");
     await this.socket.request("SETST", { st: 2 });
-    await this.socket.request("SETST", { st: 1 });
 
     // Step 4: GETTOKEN
     console.log("[LocoClient] Sending GETTOKEN...");
     await this.socket.request("GETTOKEN", {
       ts: [2, 3, 11, 12, 4, 9, 10, 18, 19],
     });
+
+    // Step 5: SETST (set status = 1, "online/foreground")
+    console.log("[LocoClient] Sending SETST (st=1)...");
+    await this.socket.request("SETST", { st: 1 });
 
     return loginResp.body;
   }
