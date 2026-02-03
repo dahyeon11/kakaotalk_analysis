@@ -4,18 +4,52 @@ import {
   randomBytes,
 } from "node:crypto";
 
-const GCM_ALGORITHM = "aes-128-gcm";
+const CFB_ALGORITHM = "aes-256-cfb";
 
-/** GCM nonce size in bytes */
-export const NONCE_SIZE = 12;
+/** CFB IV size in bytes */
+export const IV_SIZE = 16;
 
-/** GCM authentication tag size in bytes */
-export const TAG_SIZE = 16;
+/** AES-256 key size in bytes */
+export const AES_KEY_SIZE = 32;
 
 /**
- * Encrypt with AES-128-GCM.
- * Returns ciphertext + 16-byte auth tag appended.
+ * Encrypt with AES-256-CFB.
+ * Returns ciphertext only (no auth tag in CFB mode).
  */
+export function aesEncryptCFB(
+  plaintext: Buffer,
+  key: Buffer,
+  iv: Buffer,
+): Buffer {
+  const cipher = createCipheriv(CFB_ALGORITHM, key, iv);
+  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
+}
+
+/**
+ * Decrypt AES-256-CFB.
+ */
+export function aesDecryptCFB(
+  ciphertext: Buffer,
+  key: Buffer,
+  iv: Buffer,
+): Buffer {
+  const decipher = createDecipheriv(CFB_ALGORITHM, key, iv);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+export function generateAESKey(): Buffer {
+  return randomBytes(AES_KEY_SIZE); // 32 bytes for AES-256
+}
+
+export function generateIV(): Buffer {
+  return randomBytes(IV_SIZE);
+}
+
+// Legacy GCM functions kept for reference
+const GCM_ALGORITHM = "aes-128-gcm";
+export const NONCE_SIZE = 12;
+export const TAG_SIZE = 16;
+
 export function aesEncryptGCM(
   plaintext: Buffer,
   key: Buffer,
@@ -27,9 +61,6 @@ export function aesEncryptGCM(
   return Buffer.concat([encrypted, tag]);
 }
 
-/**
- * Decrypt AES-128-GCM. Input is ciphertext with 16-byte auth tag appended.
- */
 export function aesDecryptGCM(
   ciphertextWithTag: Buffer,
   key: Buffer,
@@ -44,10 +75,6 @@ export function aesDecryptGCM(
   const decipher = createDecipheriv(GCM_ALGORITHM, key, nonce);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-}
-
-export function generateAESKey(): Buffer {
-  return randomBytes(16);
 }
 
 export function generateNonce(): Buffer {

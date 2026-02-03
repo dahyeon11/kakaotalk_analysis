@@ -36,16 +36,16 @@ export interface LocoPacketHeader {
 /** LOCO header is always 22 bytes */
 export const LOCO_HEADER_SIZE = 22;
 
-/** Encrypted packet: [length:4][nonce:12][ciphertext+tag] */
-export const ENCRYPTED_HEADER_SIZE = 16; // 4 (length) + 12 (nonce)
+/** Encrypted packet: [length:4][iv:16][ciphertext] */
+export const ENCRYPTED_HEADER_SIZE = 20; // 4 (length) + 16 (IV)
 
 /** Handshake packet length field value */
 export const HANDSHAKE_LENGTH = 256;
 
 export interface LocoHandshakeData {
-  /** Encryption type (15 = RSA-OAEP-SHA1) */
+  /** Encryption type (16 = RSA variant used by KakaoTalk) */
   type: number;
-  /** Block cipher mode (4 = AES/GCM/NoPadding) */
+  /** Block cipher mode (3 = AES-256-CFB) */
   blockCipherMode: number;
   /** RSA-encrypted AES key */
   payload: Buffer;

@@ -8,10 +8,10 @@ import {
   type LocoHandshakeData,
 } from "../types/index.ts";
 import {
-  aesEncryptGCM,
-  aesDecryptGCM,
-  generateNonce,
-  NONCE_SIZE,
+  aesEncryptCFB,
+  aesDecryptCFB,
+  generateIV,
+  IV_SIZE,
   rsaEncryptOAEP,
 } from "../crypto/index.ts";
 
@@ -87,14 +87,14 @@ export function buildEncryptedPacket(
   locoPacket: Buffer,
   aesKey: Buffer,
 ): Buffer {
-  const nonce = generateNonce();
-  const encrypted = aesEncryptGCM(locoPacket, aesKey, nonce);
+  const iv = generateIV();
+  const encrypted = aesEncryptCFB(locoPacket, aesKey, iv);
 
-  // [length:4][nonce:12][ciphertext+tag]
-  const buf = Buffer.alloc(4 + NONCE_SIZE + encrypted.length);
-  buf.writeUInt32LE(NONCE_SIZE + encrypted.length, 0);
-  nonce.copy(buf, 4);
-  encrypted.copy(buf, 4 + NONCE_SIZE);
+  // [length:4][iv:16][ciphertext]
+  const buf = Buffer.alloc(4 + IV_SIZE + encrypted.length);
+  buf.writeUInt32LE(IV_SIZE + encrypted.length, 0);
+  iv.copy(buf, 4);
+  encrypted.copy(buf, 4 + IV_SIZE);
 
   return buf;
 }
@@ -110,9 +110,9 @@ export function parseEncryptedPacket(
 
   if (data.length < totalSize) return null; // fragmented
 
-  const nonce = data.subarray(4, 4 + NONCE_SIZE);
-  const payload = data.subarray(4 + NONCE_SIZE, totalSize);
-  const decrypted = aesDecryptGCM(payload, aesKey, nonce);
+  const iv = data.subarray(4, 4 + IV_SIZE);
+  const ciphertext = data.subarray(4 + IV_SIZE, totalSize);
+  const decrypted = aesDecryptCFB(ciphertext, aesKey, iv);
 
   return { decrypted, consumed: totalSize };
 }
@@ -130,8 +130,8 @@ export function buildHandshakePacket(
   // [keyLen:4][encType:4][blockMode:4][encKey:keyLen]
   const buf = Buffer.alloc(4 + 4 + 4 + encryptedKey.length);
   buf.writeUInt32LE(encryptedKey.length, 0); // RSA ciphertext length (256)
-  buf.writeUInt32LE(15, 4); // encryption type (RSA-OAEP-SHA1)
-  buf.writeUInt32LE(4, 8); // block cipher mode (AES/GCM)
+  buf.writeUInt32LE(16, 4); // encryption type (16 = RSA variant used by KakaoTalk)
+  buf.writeUInt32LE(3, 8); // block cipher mode (3 = AES-256-CFB)
   encryptedKey.copy(buf, 12);
 
   return buf;
