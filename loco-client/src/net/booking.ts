@@ -101,8 +101,10 @@ export async function resolveCheckinServer(
     const hosts = conf.checkinHostsLsl.length > 0
       ? conf.checkinHostsLsl
       : conf.checkinHosts;
-    const host = hosts[0] ?? fallbackHost;
-    const port = conf.ports[0] ?? fallbackPort;
+    // Prefer an IP address over hostname for direct connection
+    const host = hosts.find((h) => /^\d/.test(h)) ?? hosts[0] ?? fallbackHost;
+    // Prefer port 9282 (standard LOCO raw TCP) if available
+    const port = conf.ports.includes(9282) ? 9282 : (conf.ports[0] ?? fallbackPort);
     return { host, port };
   } catch (err) {
     console.warn("[Booking] Failed:", (err as Error).message, "— using fallback");
