@@ -74,6 +74,10 @@ export class LocoSocket extends EventEmitter<LocoSocketEvents> {
           this.aesKey,
           this.config.serverPublicKey,
         );
+        if (process.env["LOCO_DEBUG"]) {
+          console.log(`[Socket] handshake ${handshake.length} bytes: ${handshake.subarray(0, Math.min(64, handshake.length)).toString("hex")}`);
+          console.log(`[Socket] AES key: ${this.aesKey.toString("hex")}`);
+        }
         this.socket!.write(handshake, (err) => {
           if (err) return reject(err);
           this.emit("connected");

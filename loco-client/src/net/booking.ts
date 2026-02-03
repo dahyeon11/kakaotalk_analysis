@@ -60,6 +60,9 @@ export async function fetchBookingServer(
     });
 
     console.log("[Booking] GETCONF response received");
+    if (process.env["LOCO_DEBUG"]) {
+      console.log("[Booking] Full GETCONF body:", JSON.stringify(resp.body, null, 2));
+    }
 
     const body = resp.body;
 
