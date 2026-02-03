@@ -148,17 +148,19 @@ export function isHandshakePacket(data: Buffer): boolean {
 // [length:4 LE][loco_packet:length]
 // ---------------------------------------------------------------------------
 
+/**
+ * In plaintext mode (over TLS), LOCO packets are sent raw — no length prefix.
+ * The packet itself contains bodyLength at offset 18, so we can frame it.
+ */
 export function buildPlainPacket(locoPacket: Buffer): Buffer {
-  const buf = Buffer.alloc(4 + locoPacket.length);
-  buf.writeUInt32LE(locoPacket.length, 0);
-  locoPacket.copy(buf, 4);
-  return buf;
+  return locoPacket; // no wrapping needed
 }
 
 export class PlainPacketReader {
   private buffer: Buffer = Buffer.alloc(0);
 
-  /** Append incoming data and yield all complete parsed packets. */
+  /** Append incoming data and yield all complete parsed packets.
+   *  Framing: read LOCO header (22 bytes), then bodyLength bytes. */
   feed(
     chunk: Buffer,
   ): Array<{ header: LocoPacketHeader; body: Record<string, unknown> }> {
@@ -168,12 +170,12 @@ export class PlainPacketReader {
       body: Record<string, unknown>;
     }> = [];
 
-    while (this.buffer.length >= 4) {
-      const length = this.buffer.readUInt32LE(0);
-      const totalSize = 4 + length;
+    while (this.buffer.length >= LOCO_HEADER_SIZE) {
+      const bodyLength = this.buffer.readInt32LE(18);
+      const totalSize = LOCO_HEADER_SIZE + bodyLength;
       if (this.buffer.length < totalSize) break;
 
-      const payload = this.buffer.subarray(4, totalSize);
+      const payload = this.buffer.subarray(0, totalSize);
       const loco = parseLocoPacket(payload);
       if (loco) results.push(loco);
 
